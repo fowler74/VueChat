@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<title>Chat</title>
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+
+	<style>
+		html, body {height:100%; background:#e7e7e7; margin:0; }
+		#app {display:flex; width:100%; min-height:100%; font-family:helvetica; align-items:center; justify-content:center;}
+		#login {max-width:350px; min-width:350px; box-sizing:border-box; padding:50px; background:#fff; box-shadow:0 3px 6px rgba(0,0,0,.3); border-radius:5px;}
+		#login .fields {display:flex; flex-wrap:nowrap;}
+		#login .fields input {border:0; width:100%; border:1px solid #e7e7e7; border-right:0; box-sizing:border-box; padding:10px; border-top-left-radius:3px; border-bottom-left-radius:3px;}
+		#login .fields .loginBtn, #login .fields button {border:0; padding:0; font-family:helvetica; font-size:14px; text-decoration:none; color:#888; background:#e7e7e7; border-top-right-radius:3px; border-bottom-right-radius:3px;}
+		#login .fields .loginBtn span, #login .fields button span {padding:0 15px; line-height:35px; display:inline-block;}
+		#login .fields .loginBtn {color:#333;}
+
+		h1 {font-size:18px;}
+
+		#messagesContainer {max-width:350px; min-height:500px; max-height:500px; display:flex; flex-flow:column; flex-wrap:nowrap; min-width:350px; background:#fff; box-sizing:border-box; box-shadow:0 3px 6px rgba(0,0,0,.3); border-radius:5px; padding:15px;}
+		
+		#messageList {width:100%; margin-bottom:auto; overflow:scroll; display:flex; flex-wrap:wrap;}
+
+		#chatArea {display:flex; min-height:95px; align-items:flex-end;}
+		#chatArea #chatbox {width:100%; resize: none; border:1px solid #e7e7e7; border-right:0; margin-top:15px; font-size:16px; border-radius:3px; max-height:150px; min-height:80px; box-sizing:border-box; padding:10px; border-top-right-radius:0px; border-bottom-right-radius:0px;}
+		#chatArea button {border:0; cursor:pointer; font-family:helvetica; font-size:14px; text-decoration:none; color:#888; background:#e7e7e7; padding:0 15px; min-height:80px; line-height:80px; border-top-right-radius:3px; border-bottom-right-radius:3px;}
+
+		.messageWrap {width:100%; display:flex;}
+		.messageWrap.user {justify-content:flex-end; text-align:right;}
+		.messageWrap.user .message {background:#28a745;}
+		.messageWrap:last-child .message {margin-bottom:0;}
+		.message {border-radius:3px; word-break:break-word; color:#fff; max-width:75%; background:#007bff; box-sizing:border-box; padding:10px; margin-bottom:5px;}
+		.message p {margin:0; font-size:16px; padding-bottom:5px;}
+		.message a {color:#fff; font-weight:bold; word-break:break-all;}
+		.message .userName {font-size:8px; text-transform:uppercase; border-top:1px solid #fff; padding-top:5px;}
+
+	</style>
+</head>
+<body>
+	<div id="app">
+		
+			<router-view></router-view>
+		
+	</div>
+
+	<script src="https://www.gstatic.com/firebasejs/4.13.0/firebase.js"></script>
+	<script src="https://cdn.jsdelivr.net/npm/vue/dist/vue.js"></script>
+	<script src="https://unpkg.com/vue-router@2.0.0/dist/vue-router.js"></script>
+	<script>
+
+		var config = {
+			apiKey: "AIzaSyB3YzLZvXma3zEvxHF6LGDqgSpbn-ya-eE",
+			authDomain: "chat-app-154cf.firebaseapp.com",
+			databaseURL: "https://chat-app-154cf.firebaseio.com",
+			projectId: "chat-app-154cf",
+			storageBucket: "",
+			messagingSenderId: "658874143694"
+		};
+		firebase.initializeApp(config);
+
+		const db = firebase.database();
+
+		const messaging = firebase.messaging();
+		// messaging.requestPermission().then(function(){
+		// 	console.log(messaging);
+		// 	return messaging.getToken();
+		// }).then(function(token){
+		// 	console.log(token);
+		// }).catch(function(err){
+		// 	console.log('denied');
+		// })
+
+
+		// messaging.setBackgroundMessageHandler(function(payload){
+		// 	const title = 'testing';
+		// 	const options = {
+		// 		body: payload.data.status
+		// 	}
+		// 	return self.registration.showNotification(title, options);
+		// })
+
+		const SignupTemplate = Vue.component('signup-template', {
+			data(){
+				return {
+					loginText: 'Log In',
+					username: '',
+					login: false
+				}
+			},
+			template: `
+					<div id="login">
+						<h1>{{loginText}} <span v-if="this.username != ''">as {{username}}</span></h1>
+						<div class="fields">
+							<input type="text" v-on:keyup="userLogin" v-model="username" placeholder="Username">
+							<router-link class="loginBtn" v-if="login == true" to="/chat/chatroom"><span v-on:click="storeUsername">Login</span></router-link><button v-else><span>Login</span></button>
+						</div>
+					</div>
+				`,
+			methods:{
+				userLogin() {
+					if (this.username.length >= 3) {
+						this.login = true
+					}else {
+						this.login = false
+					}
+				},
+				storeUsername() {
+					if (this.login == true) {
+						var time = new Date;
+						sessionStorage.setItem('username', this.username);
+						db.ref('/users').push({
+							username: this.username,
+							loggedInTime: this.timeFormat(time)
+						})
+					}
+				}
+			}
+		})
+
+		const MessageContainer = Vue.component('message-container', {
+			data(){
+				return {
+					loggedInUser: sessionStorage.getItem('username')
+				}
+			},
+			template: `
+					<div>
+						<h1 id="loggedInUser">Logged In as {{this.loggedInUser}}</h1>
+						<div id="messagesContainer">
+							<message-list></message-list>
+							<chatbox></chatbox>
+						</div>
+					</div>
+				`
+		})
+
+		const MessageList = Vue.component('message-list', {
+			data(){
+				return {
+					messages: []
+				}
+			},
+			template: `
+					<div id="messageList">
+						<audio ref="audioElm" src="http://www.soundjay.com/button/beep-07.wav" autostart="false"></audio>
+						<user-message v-for="comment in messages[messages.length - 1]" :id="comment.key" :user="comment.user" :message="comment.message" :timeAdded="comment.timeAdded"></user-message>
+					</div>
+				`,
+			created() {
+				db.ref('messages').limitToLast(100).on("value", snap => {
+					this.messages.push(snap.val());
+					this.playSound();
+					this.scrollChatboxToBottom();
+				})
+			}
+		})
+
+		const UserMessage = Vue.component('user-message', {
+			props: ['user', 'message', 'timeAdded'],
+			data(){
+				return {
+					userType: 'friend'
+				}
+			},
+			template: `
+					<div class="messageWrap" v-bind:class="userStyle(userType)">
+						<div class="message">
+							<p v-html="urlCreate(message)"></p>
+							<span class="userName">{{user}} - {{timeAdded}}</span>
+						</div>
+					</div>
+				`,
+			methods: {
+				userStyle() {
+					if (this.user == sessionStorage.getItem('username', this.username)) {
+						this.userType = 'user';
+						return this.userType;
+					}else {
+						this.userType = 'friend';
+						return this.userType;
+					}
+				},
+				urlCreate(text) {
+				    var urlRegex = /(https?:\/\/[^\s]+)/g;
+				    return text.replace(urlRegex, function(url) {
+				        return '<a target="_blank" href="' + url + '">' + url + '</a>';
+				    })
+				}
+			},
+			mounted() {
+				this.scrollChatboxToBottom();
+			}
+		})
+
+		const Chatbox = Vue.component('chatbox', {
+			data(){
+				return {
+					message: '',
+					user: sessionStorage.getItem('username')
+				}
+			},
+			template: `
+					<div id="chatArea">
+						<textarea v-on:keyup.enter="postMessage" id="chatbox" v-model="message" placeholder="Type a Message"></textarea>
+						<button v-on:click="postMessage">Send</button>
+						<audio ref="audioElm" src="http://www.soundjay.com/button/beep-07.wav" autostart="false"></audio>
+					</div>	
+				`,
+			methods: {
+				postMessage() {
+					var date = new Date;
+					db.ref('messages').push().set({
+						message: this.message,
+						user: this.user,
+						timeAdded: this.timeFormat(date)
+					})
+					this.playSound();
+					this.message = '';
+				}
+			}
+		})
+
+		const router = new VueRouter({
+			mode: 'history',
+			routes: [
+				{ 
+					path: '/chat/', 
+					component: SignupTemplate
+				},
+				{ 
+					path: '/chat/chatroom', 
+					component: MessageContainer
+				},
+			]
+		})
+
+		Vue.mixin({
+			methods: {
+				scrollChatboxToBottom() {
+					var objDiv = document.getElementById("messageList");
+     				objDiv.scrollTop = objDiv.scrollHeight;
+				},
+				timeFormat(d) {
+					var timeofday = '';
+					var hours = d.getHours();
+					var minutes = d.getMinutes();
+					if (hours >= 12) {
+						timeofday = 'PM';
+					}else {
+						timeofday = 'AM';
+					}
+					if (hours > 12) {
+						hours = hours - 12;
+					}
+					if (minutes < 10) {
+						minutes = '0' + minutes;
+					}
+					return hours + ':' + minutes + ' ' + timeofday;
+				},
+				playSound() {
+					this.$refs.audioElm.play()
+				}
+			}
+		})
+
+		const app = new Vue({
+			router,
+			el: '#app',
+			data: {
+
+			}
+		})
+		
+	</script>
+</body>
+</html>
