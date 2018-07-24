@@ -32,7 +32,9 @@
 		.message {border-radius:3px; word-break:break-word; color:#fff; max-width:75%; background:#007bff; box-sizing:border-box; padding:10px; margin-bottom:5px;}
 		.message p {margin:0; font-size:16px; padding-bottom:5px;}
 		.message a {color:#fff; font-weight:bold; word-break:break-all;}
+		.message textarea {border:1px solid #e7e7e7; resize:none; width:100%; box-sizing:border-box; padding:5px; min-height:35px; border-radius:3px;}
 		.message .userName {font-size:8px; text-transform:uppercase; border-top:1px solid #fff; padding-top:5px;}
+		.message button {padding:0 3px; margin-left:10px; cursor:pointer; box-sizing:border-box; font-size:8px; background:#fff; border-radius:3px; color:#888; line-height:8px;}
 
 	</style>
 </head>
@@ -49,12 +51,12 @@
 	<script>
 
 		var config = {
-			apiKey: "USE_YOUR_OWN_FIREBASE_CONFIG",
-			authDomain: "USE_YOUR_OWN_FIREBASE_CONFIG",
-			databaseURL: "USE_YOUR_OWN_FIREBASE_CONFIG",
-			projectId: "USE_YOUR_OWN_FIREBASE_CONFIG",
+			apiKey: "AIzaSyB3YzLZvXma3zEvxHF6LGDqgSpbn-ya-eE",
+			authDomain: "chat-app-154cf.firebaseapp.com",
+			databaseURL: "https://chat-app-154cf.firebaseio.com",
+			projectId: "chat-app-154cf",
 			storageBucket: "",
-			messagingSenderId: "USE_YOUR_OWN_FIREBASE_CONFIG"
+			messagingSenderId: "658874143694"
 		};
 		firebase.initializeApp(config);
 
@@ -142,31 +144,35 @@
 			},
 			template: `
 					<div id="messageList">
-						<audio ref="audioElm" src="http://www.soundjay.com/button/beep-07.wav" autostart="false"></audio>
-						<user-message v-for="comment in messages[messages.length - 1]" :id="comment.key" :user="comment.user" :message="comment.message" :timeAdded="comment.timeAdded"></user-message>
+						<audio ref="audioElm" src="https://www.soundjay.com/button/sounds/button-41.mp3" autostart="false"></audio>
+						<user-message v-for="(comment, key) in messages[messages.length - 1]" :id="key" :user="comment.user" :message="comment.message" :timeAdded="comment.timeAdded"></user-message>
 					</div>
 				`,
 			created() {
 				db.ref('messages').limitToLast(100).on("value", snap => {
 					this.messages.push(snap.val());
 					this.playSound();
-					this.scrollChatboxToBottom();
 				})
+			},
+			mounted() {
+				this.scrollChatboxToBottom();
 			}
 		})
 
 		const UserMessage = Vue.component('user-message', {
-			props: ['user', 'message', 'timeAdded'],
+			props: ['user', 'message', 'timeAdded', 'id'],
 			data(){
 				return {
-					userType: 'friend'
+					userType: 'friend',
+					edit: false
 				}
 			},
 			template: `
 					<div class="messageWrap" v-bind:class="userStyle(userType)">
 						<div class="message">
-							<p v-html="urlCreate(message)"></p>
-							<span class="userName">{{user}} - {{timeAdded}}</span>
+							<p v-if="edit == false" v-on:click="editMessage" v-html="urlCreate(message)"></p>
+							<textarea ref="textArea" v-if="edit == true" v-on:blur="submitEdit" type="text" v-model="message"></textarea>
+							<span class="userName">{{user}} - {{timeAdded}} <button v-if="userType == 'user'" v-on:click="deleteMessage">DELETE</button></span>
 						</div>
 					</div>
 				`,
@@ -185,7 +191,24 @@
 				    return text.replace(urlRegex, function(url) {
 				        return '<a target="_blank" href="' + url + '">' + url + '</a>';
 				    })
+				},
+				editMessage() {
+					if (this.userType == 'user') {
+						this.edit = true;
+					}
+				},
+				submitEdit() {
+					db.ref('messages').child(this.id).update({
+						message: this.message
+					})
+					this.edit = false;
+				},
+				deleteMessage() {
+					db.ref('messages').child(this.id).remove();
 				}
+			},
+			updated() {
+				this.$refs.textArea.focus();
 			},
 			mounted() {
 				this.scrollChatboxToBottom();
@@ -203,19 +226,23 @@
 					<div id="chatArea">
 						<textarea v-on:keyup.enter="postMessage" id="chatbox" v-model="message" placeholder="Type a Message"></textarea>
 						<button v-on:click="postMessage">Send</button>
-						<audio ref="audioElm" src="http://www.soundjay.com/button/beep-07.wav" autostart="false"></audio>
+						<audio ref="audioElm" src="https://www.soundjay.com/button/sounds/button-41.mp3" autostart="false"></audio>
 					</div>	
 				`,
 			methods: {
 				postMessage() {
 					var date = new Date;
 					db.ref('messages').push().set({
-						message: this.message,
+						message: this.stripHTML(this.message),
 						user: this.user,
 						timeAdded: this.timeFormat(date)
 					})
 					this.playSound();
 					this.message = '';
+				},
+				stripHTML(text) {
+					var cleanText = text.replace(/<\/?[^>]+(>|$)/g, "");
+					return cleanText;
 				}
 			}
 		})
@@ -259,6 +286,19 @@
 				},
 				playSound() {
 					this.$refs.audioElm.play()
+				},
+				randomColorGenerator() {
+					function randomGen(max, min) {
+						var rand = Math.floor(Math.random() * max) + min;
+						return rand;
+					}
+					function randomColor() {
+						var color1 = randomGen(128, 0);
+						var color2 = randomGen(128, 0);
+						var color3 = randomGen(128, 0);
+						return 'rgba('+color1+','+color2+','+color3+')';
+					}
+					return randomColor();
 				}
 			}
 		})
